@@ -1,3 +1,4 @@
+from alembic.autogenerate import compare_metadata
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,7 +11,7 @@ from sqlalchemy import create_engine
 
 from alembic import context
 from app.core.db import Base
-from app.models import Account, User, UserCredentials
+from app.models import Account, User
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -63,6 +64,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_metadata=True,
     )
 
     with context.begin_transaction():
