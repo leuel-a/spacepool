@@ -1,11 +1,17 @@
-from fastapi import HTTPException, status
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql._typing import ColumnExpressionArgument
 
 from app.core.security import hash_password, verify_password
-from app.models import Account, User, UserPasswordSignupRequestForm
+from app.models import (
+    Account,
+    GoogleOAuthResponse,
+    User,
+    UserPasswordSignupRequestForm,
+)
 
 
 async def get_user(
@@ -49,32 +55,58 @@ async def authenticate_user(
     return user
 
 
-async def create_user(
-    session: AsyncSession, user_create: UserPasswordSignupRequestForm
+async def create_user_password(
+    session: AsyncSession, user: User, password: str
 ):
-    user = User(
-        name=user_create.name,
-        email=user_create.email,
-        email_verified=False,
-        is_super_user=False,
-    )
-
     session.add(user)
 
     try:
         await session.flush()
     except IntegrityError:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email is already registered",
-        )
+        raise
 
     account = Account(
         provider_id="credentials",
         account_id=user.id,
         user_id=user.id,
-        password=hash_password(user_create.password),
+        password=hash_password(password),
+    )
+
+    session.add(account)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def create_user_provider(
+    session: AsyncSession, token: GoogleOAuthResponse
+):
+    userinfo = token.userinfo
+
+    user = User(
+        name=userinfo.name,
+        email=userinfo.email,
+        email_verified=userinfo.email_verified,
+        image=userinfo.picture,
+        is_super_user=False,
+    )
+    session.add(user)
+
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        raise
+
+    account = Account(
+        account_id=userinfo.sub,
+        provider_id="google",
+        user_id=user.id,
+        access_token=token.access_token,
+        id_token=token.id_token,
+        access_token_expires_at=datetime.fromtimestamp(token.expires_at),
+        scope=token.scope,
     )
 
     session.add(account)

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -32,6 +32,12 @@ class UserPasswordLoginRequestForm(BaseModel):
     password: str
 
 
+class UserPasswordSignupResponse(BaseModel):
+    name: str
+    email: str
+    token: Token
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -43,6 +49,40 @@ class TimestampMixin:
         nullable=False,
     )
 
+
+class GoogleUserInfo(BaseModel):
+    iss: str
+    azp: str
+    aud: str
+    sub: str
+
+    email: EmailStr
+    email_verified: bool
+
+    at_hash: str
+    nonce: str
+
+    name: str
+    picture: str
+    given_name: str
+    family_name: str
+
+    iat: int
+    exp: int
+
+
+class GoogleOAuthResponse(BaseModel):
+    access_token: str
+    expires_in: int
+    scope: str
+    token_type: str
+    id_token: str
+    expires_at: int
+
+    userinfo: GoogleUserInfo
+
+
+# DATABASE MODELS
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
