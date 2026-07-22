@@ -1,5 +1,4 @@
 from datetime import timedelta
-from sys import exec_prefix
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, HTTPException, Request, status
@@ -13,10 +12,11 @@ from app.core.config import settings
 from app.core.deps import SessionDep
 from app.core.security import create_access_token
 from app.models import (
-    Account,
     GoogleOAuthResponse,
     Token,
     User,
+)
+from app.models.user import (
     UserPasswordLoginRequestForm,
     UserPasswordSignupRequestForm,
     UserPasswordSignupResponse,
@@ -117,7 +117,7 @@ async def google(request: Request):
     return await oauth.google.authorize_redirect(request, redirect_url)  # type: ignore
 
 
-@router.get("/google/callback")
+@router.get("/google/callback", response_model=Token)
 async def google_callback(session: SessionDep, request: Request):
     raw_token = await oauth.google.authorize_access_token(request)  # type: ignore
 
@@ -134,4 +134,20 @@ async def google_callback(session: SessionDep, request: Request):
             status_code=status.HTTP_409_CONFLICT,
             detail="Email is already registered",
         )
-    return user
+
+    access_token_expires = timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    try:
+        access_token = create_access_token(
+            settings,
+            data={"sub": user.email},
+            expires_delta=access_token_expires,
+        )
+    except (ValueError, InvalidPayloadError):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong please try again",
+        )
+    return Token(access_token=access_token)

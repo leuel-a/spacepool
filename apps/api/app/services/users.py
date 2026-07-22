@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -10,7 +11,6 @@ from app.models import (
     Account,
     GoogleOAuthResponse,
     User,
-    UserPasswordSignupRequestForm,
 )
 
 
@@ -79,10 +79,32 @@ async def create_user_password(
     return user
 
 
+async def get_account_by_provider(
+    session: AsyncSession, provider_id: str, account_id: str
+) -> Account | None:
+    stmt = select(Account).where(
+        Account.provider_id == provider_id, Account.account_id == account_id
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def create_user_provider(
     session: AsyncSession, token: GoogleOAuthResponse
-):
+) -> User:
     userinfo = token.userinfo
+
+    account = await get_account_by_provider(session, "google", userinfo.sub)
+    if account:
+        account.access_token = token.access_token
+        account.id_token = token.id_token
+        account.access_token_expires_at = datetime.fromtimestamp(
+            token.expires_at
+        )
+        account.scope = token.scope
+        await session.commit()
+        # TODO: I don't think its good to use typing.cast here
+        return cast(User, await get_user(session, User.id == account.user_id))
 
     user = User(
         name=userinfo.name,

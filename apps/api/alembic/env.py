@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 
 from alembic import context
 from app.core.db import Base
-from app.models import Account, User
+from app.models import Account, User, Resource, Organization, Space
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

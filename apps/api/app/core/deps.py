@@ -1,25 +1,35 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
 from joserfc.errors import JoseError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models import User
 from app.core.db import get_db
 from app.core.security import decode_access_token
+from app.models import User
 from app.services.users import get_user_by_email
 
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/login/access-token"
+bearer_scheme = HTTPBearer(
+    scheme_name="Bearer Authentication",
+    description="Enter JWT Token",
+    auto_error=False,
 )
 
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
-TokenDep = Annotated[str, Depends(oauth2_scheme)]
+CredentialsDep = Annotated[
+    HTTPAuthorizationCredentials, Depends(bearer_scheme)
+]
 
 
-async def get_current_user(session: SessionDep, token: TokenDep):
+async def get_current_user(
+    session: SessionDep,
+    credentials: CredentialsDep,
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -27,6 +37,7 @@ async def get_current_user(session: SessionDep, token: TokenDep):
     )
 
     try:
+        token = credentials.credentials
         claims = decode_access_token(settings, token)
     except JoseError:
         raise credentials_exception
